@@ -9,7 +9,19 @@ tempo_factors:
   - 0.90
   - 0.85
 
-export_format: wav
+export_format: mp3
+mp3_bitrate: 192
+
+# Piano volume in the output: 0 = fully removed, 100 = original level
+solo_level: 30
+
+# Pitch correction: set original_freq and target_freq to shift the tuning.
+# Leave both at 0 to skip pitch shifting.
+# reference_note is informational only (e.g. "a", "e_b", "d_s").
+reference_note: e_b
+original_freq: 163.20
+target_freq: 155
+
 overwrite: false
 
 paths:

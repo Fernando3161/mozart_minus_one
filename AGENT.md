@@ -8,38 +8,40 @@ The purpose of the project is to create practice accompaniment files from commer
 
 1. Taking an audio recording as input.
 2. Separating the piano stem from the rest of the recording.
-3. Exporting a version with the piano removed or strongly reduced.
-4. Exporting practice versions at different speeds while preserving pitch.
+3. Exporting a version with the piano removed or blended to a configured level.
+4. Optionally correcting the tuning pitch to a target reference frequency.
+5. Exporting practice versions at different speeds as MP3, while preserving pitch.
 
 The project is intended for private practice use.
 
 ## Main Goal
 
-Build a reproducible local Python pipeline that can transform a source recording into a set of practice-ready audio files:
+Build a reproducible local Python pipeline that can transform a source recording into a set of practice-ready MP3 files:
 
-- `no_piano_100.wav`
-- `no_piano_95.wav`
-- `no_piano_90.wav`
-- `no_piano_85.wav`
+- `<track>_no_piano_100.mp3`
+- `<track>_no_piano_95.mp3`
+- `<track>_no_piano_90.mp3`
+- `<track>_no_piano_85.mp3`
 
-Optional formats such as `.mp3` may be added later, but `.wav` is the required baseline output.
+When `solo_level > 0`, filenames encode the piano level:
+
+- `<track>_piano20pct_100.mp3`
+- `<track>_piano20pct_95.mp3`
+- etc.
 
 ## Core Workflow
 
-The expected workflow is:
-
 ```text
 raw recording
-    -> source separation
+    -> source separation (Demucs Python API)
     -> piano / no_piano stems
-    -> optional quality checks
-    -> tempo variants
-    -> exported practice files
+    -> accompaniment mix (no_piano + piano * solo_level/100)
+    -> optional pitch correction (frequency ratio → semitone shift)
+    -> tempo variants (time-stretch preserving pitch)
+    -> exported MP3 practice files
 ```
 
 ## Project Priorities
-
-The implementation shall prioritize:
 
 1. Reproducibility.
 2. Clear file organization.
@@ -49,47 +51,70 @@ The implementation shall prioritize:
 6. Explicit logs and failure messages.
 7. Code that is easy to inspect, modify, and extend.
 
-Audio quality is important, but the project must remain realistic. Perfect piano removal is not expected.
-
 ## Scope
 
 The project shall support:
 
 - Loading an audio file from `data/raw/`.
-- Running source separation using a piano-capable model.
-- Exporting a no-piano or muted-piano backing track.
+- Running source separation using a piano-capable Demucs model via Python API.
+- Creating an accompaniment by mixing the no-piano stem with an adjustable piano level.
+- Applying a pitch correction so the tuning matches a target reference frequency.
 - Creating slowed-down versions at predefined tempo percentages.
 - Saving all generated files in structured output folders.
-- Keeping intermediate files available for inspection.
+- Exporting all final files as MP3.
+- Keeping intermediate WAV files available for inspection.
 
 ## Non-Scope
 
-The project shall not attempt to:
-
-- Create a professional orchestral backing track.
-- Reconstruct a clean studio-quality orchestra.
-- Guarantee perfect piano removal.
-- Automatically identify musical sections, bars, cadenzas, or tempo changes.
-- Replace proper MIDI or score-based accompaniment.
-- Redistribute copyrighted recordings or processed derivatives.
+- Professional orchestral backing tracks.
+- Perfect piano removal.
+- Automatic identification of musical sections or tempo changes.
+- Score-based or MIDI-based accompaniment.
+- Redistribution of copyrighted recordings or processed derivatives.
 
 ## Technical Direction
 
-The recommended source separation tool is Demucs using a model that supports a piano stem.
+### Source Separation
 
-The expected baseline command is conceptually:
+Uses the Demucs Python API (`get_model` + `apply_model`) instead of subprocess, so that audio is saved with `soundfile` rather than `torchaudio.save`. This avoids the `torchcodec` / full-shared FFmpeg dependency on Windows.
 
-```bash
-python -m demucs -n htdemucs_6s --two-stems=piano <input_audio_file>
+Model: `htdemucs_6s` (supports piano stem).
+
+### Piano Volume
+
+Controlled by `solo_level` (0–100):
+
+```python
+accompaniment = no_piano + piano * (solo_level / 100)
 ```
 
-The implementation may call Demucs through:
+`solo_level=0` is the standard practice track. `solo_level=20` retains a ghosted piano for orientation.
 
-- A Python subprocess.
-- A thin Python wrapper.
-- A script-level command.
+### Pitch Correction
 
-The tempo adjustment shall preserve pitch. The preferred implementation is `pyrubberband`, with a fallback using `librosa` if needed.
+Converts a frequency ratio to a semitone offset:
+
+```python
+n_steps = 12 * log2(target_freq / original_freq)
+```
+
+Applied once before tempo processing. Prefers `pyrubberband`; falls back to `librosa.effects.pitch_shift`.
+
+Example: A recorded Eb measures at 314 Hz, target is 311.13 Hz.
+
+```yaml
+reference_note: e_b
+original_freq: 314.0
+target_freq: 311.13
+```
+
+### Tempo Adjustment
+
+Pitch-preserving time-stretch. Prefers `pyrubberband`; falls back to `librosa.effects.time_stretch`.
+
+### MP3 Export
+
+Uses `lameenc` (bundled with demucs) for MP3 encoding. No external FFmpeg DLLs required for export.
 
 ## Coding Style
 
@@ -117,38 +142,28 @@ Avoid:
 
 ### `src/mozart_minus_one/separate.py`
 
-Responsible for:
-
-- Validating that an input audio file exists.
-- Running source separation.
-- Finding generated stems.
-- Returning paths to the piano and no-piano stems.
+- Validates that an input audio file exists.
+- Runs Demucs via Python API (loads with librosa, saves with soundfile).
+- Returns paths to the piano and no-piano stems.
 
 ### `src/mozart_minus_one/mute_piano.py`
 
-Responsible for:
-
-- Selecting the no-piano stem when available.
-- Optionally creating a reduced-piano mix if a full removal is too damaged.
-- Saving a clean baseline accompaniment file.
+- Mixes the no-piano stem with the piano stem at the configured `solo_level`.
+- Saves a clean baseline accompaniment WAV file.
+- Filename encodes the solo level.
 
 ### `src/mozart_minus_one/tempo.py`
 
-Responsible for:
-
-- Loading audio.
-- Creating tempo-adjusted versions.
-- Preserving pitch.
-- Exporting files with clear names.
+- Loads audio.
+- Applies optional pitch shift (frequency ratio → semitones).
+- Creates tempo-adjusted versions.
+- Exports as MP3 using lameenc (or WAV if requested).
 
 ### `src/mozart_minus_one/pipeline.py`
 
-Responsible for:
-
-- Orchestrating the full process.
-- Reading configuration.
-- Calling separation, piano removal, tempo export, and logging.
-- Returning a summary of created files.
+- Orchestrates the full process.
+- Reads configuration including `solo_level`, `original_freq`, `target_freq`.
+- Calls separation, accompaniment creation, tempo export, and logging.
 
 ## Expected Scripts
 
@@ -158,58 +173,41 @@ Runs only the separation stage.
 
 ### `scripts/export_practice_versions.py`
 
-Takes an existing no-piano file and creates tempo variants.
+Takes an existing accompaniment file and creates MP3 tempo variants.
 
 ### `scripts/full_pipeline.py`
 
-Runs the complete workflow from raw input to final practice exports.
+Runs the complete workflow from raw input to final MP3 exports.
+
+Supports `--config` and `--dry-run` flags.
+
+## Configuration
+
+```yaml
+input_file: data/raw/mozart_pc_22_mov1.mp3
+separation_model: htdemucs_6s
+target_stem: piano
+tempo_factors: [1.00, 0.95, 0.90, 0.85]
+export_format: mp3
+mp3_bitrate: 192
+solo_level: 0
+reference_note: e_b
+original_freq: 314.0
+target_freq: 311.13
+overwrite: false
+```
 
 ## Data Policy
 
-The repository shall not include large audio recordings by default.
+Large audio recordings shall not be committed. Use:
 
-Use:
-
-```text
-data/raw/
-```
-
-for local source files.
-
-Use:
-
-```text
-data/separated/
-```
-
-for intermediate stems.
-
-Use:
-
-```text
-data/exports/
-```
-
-for practice-ready audio files.
-
-Generated audio files should normally be ignored by Git.
+- `data/raw/` for source files.
+- `data/separated/` for intermediate WAV stems.
+- `data/exports/` for final MP3 practice files.
 
 ## Logging
 
-Every full pipeline run shall create a log file in:
-
-```text
-outputs/logs/
-```
-
-The log shall include:
-
-- Input file path.
-- Selected model.
-- Output folder.
-- Exported speeds.
-- Any detected warnings.
-- Any failures with clear error messages.
+Every full pipeline run shall create a log in `outputs/logs/` including input file, model, tempo variants, format, solo level, pitch parameters, created files, and any warnings or failures.
 
 ## Error Handling
 
@@ -218,49 +216,25 @@ The project shall fail clearly when:
 - The input file does not exist.
 - The input format is unsupported.
 - Demucs is not installed.
-- FFmpeg is missing.
-- Rubber Band is missing when required.
 - Expected stems are not found.
+- `solo_level` is outside 0–100.
+- Frequency values are non-positive.
 - Output files cannot be written.
-
-## Configuration
-
-Default values shall be defined in:
-
-```text
-configs/default.yaml
-```
-
-The configuration shall include:
-
-- Input file path.
-- Separation model.
-- Output directory.
-- Tempo percentages.
-- Export format.
-- Overwrite behavior.
-- Logging level.
 
 ## Testing Expectations
 
 Tests shall verify:
 
-- Correct path handling.
-- Correct output file naming.
-- Correct tempo factor interpretation.
-- Correct error handling for missing files.
-- Correct configuration loading.
-- Pipeline dry-run behavior.
-
-Audio quality itself is not required to be unit-tested, but output existence and basic file validity shall be tested.
-
-## Practical Quality Standard
-
-The result is acceptable when the piano is reduced enough that the user can practice over the recording without being dominated by the original piano part.
-
-Residual piano artifacts are acceptable.
-
-Destroyed orchestral texture, severe phasing, or unstable tempo processing are not acceptable.
+- Correct path handling and project structure.
+- Output filename generation (format, solo level).
+- Frequency-to-semitone conversion.
+- Pitch shift function.
+- Solo level mixing (0%, 50%, 100%).
+- MP3 export via lameenc.
+- Tempo factor interpretation.
+- Dry-run behavior including new parameters.
+- Missing input file errors.
+- Configuration loading for all new fields.
 
 ## Development Rule
 
@@ -268,10 +242,11 @@ Work incrementally.
 
 Recommended implementation order:
 
-1. Configuration loading.
-2. Path validation.
-3. Tempo export from an existing audio file.
-4. Demucs separation wrapper.
-5. Full pipeline.
-6. Tests.
-7. Documentation.
+1. Configuration loading and new parameters.
+2. Path validation and filename generation.
+3. MP3 export (lameenc).
+4. Solo level mixing.
+5. Pitch correction.
+6. Tempo export pipeline integration.
+7. Tests.
+8. Documentation.

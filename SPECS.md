@@ -6,31 +6,19 @@
 
 ## Project Objective
 
-Create a local Python-based tool that generates practice accompaniment files from an audio recording of a Mozart piano concerto by removing or reducing the piano part and exporting multiple tempo versions.
+Create a local Python-based tool that generates practice accompaniment files from an audio recording of a Mozart piano concerto by:
+
+1. Removing or blending the piano part to a configurable level.
+2. Optionally correcting the tuning to a target reference frequency.
+3. Exporting multiple tempo versions as MP3 files while preserving pitch.
 
 The system is designed for private piano practice.
-
-## Problem Statement
-
-Good MIDI files or clean orchestral backing tracks for Mozart piano concertos are not always available. The project explores an alternative workflow:
-
-1. Use an existing recording.
-2. Separate the piano from the orchestra.
-3. Export a no-piano or reduced-piano version.
-4. Generate slower versions for practice.
-
-The result does not need to be perfect. It must be useful enough for practice.
 
 ## Input
 
 The system shall accept one audio file as input.
 
-Supported baseline formats:
-
-- `.wav`
-- `.mp3`
-- `.flac`
-- `.m4a`, if FFmpeg support is available
+Supported baseline formats: `.wav`, `.mp3`, `.flac`, `.m4a`.
 
 The input file shall be placed in:
 
@@ -38,30 +26,15 @@ The input file shall be placed in:
 data/raw/
 ```
 
-Example:
-
-```text
-data/raw/mozart_k488_movement_1.mp3
-```
-
 ## Output
 
-The system shall produce practice audio files in:
+The system shall produce practice audio files in MP3 format in:
 
 ```text
 data/exports/
 ```
 
-Required output files:
-
-```text
-<track_name>_no_piano_100.wav
-<track_name>_no_piano_95.wav
-<track_name>_no_piano_90.wav
-<track_name>_no_piano_85.wav
-```
-
-Optional later output:
+Required output files when `solo_level=0`:
 
 ```text
 <track_name>_no_piano_100.mp3
@@ -70,133 +43,157 @@ Optional later output:
 <track_name>_no_piano_85.mp3
 ```
 
+Required output files when `solo_level>0` (example `solo_level=20`):
+
+```text
+<track_name>_piano20pct_100.mp3
+<track_name>_piano20pct_95.mp3
+<track_name>_piano20pct_90.mp3
+<track_name>_piano20pct_85.mp3
+```
+
 ## Intermediate Output
 
-Separated stems shall be saved in:
+Separated stems and accompaniment WAV files shall be saved in:
 
 ```text
 data/separated/
 ```
 
-Expected intermediate files may include:
+Expected intermediate files:
 
 ```text
-piano.wav
-no_piano.wav
+data/separated/htdemucs_6s/<track>/piano.wav
+data/separated/htdemucs_6s/<track>/no_piano.wav
+data/separated/<track>_no_piano.wav          (solo_level=0)
+data/separated/<track>_piano<N>pct.wav       (solo_level>0)
 ```
-
-The exact folder structure may depend on the separation tool, but the project shall normalize the final paths internally.
 
 ## Required Tempo Variants
 
-The default tempo variants are:
-
-| Label | Tempo factor | Meaning |
+| Label | Factor | Meaning |
 |---|---:|---|
 | 100 | 1.00 | Original speed |
-| 95 | 0.95 | 95 percent speed |
-| 90 | 0.90 | 90 percent speed |
-| 85 | 0.85 | 85 percent speed |
+| 95 | 0.95 | 95% speed |
+| 90 | 0.90 | 90% speed |
+| 85 | 0.85 | 85% speed |
 
-Pitch shall remain unchanged.
+Pitch shall remain unchanged across all variants.
 
 ## Functional Requirements
 
 ### FR-001: Input File Validation
 
-The system shall check whether the selected input file exists before processing.
-
-If the file does not exist, the system shall stop and provide a clear error message.
+The system shall check whether the selected input file exists before processing. If the file does not exist, the system shall stop with a clear error message.
 
 ### FR-002: Source Separation
 
-The system shall run a source separation process capable of extracting a piano stem.
+The system shall run source separation using the Demucs Python API.
 
-The baseline separation backend shall be Demucs.
+Baseline model: `htdemucs_6s`  
+Target stem: `piano`
 
-The baseline model shall be:
+Stems are saved with soundfile to avoid the torchaudio/torchcodec dependency on Windows.
 
-```text
-htdemucs_6s
+### FR-003: Accompaniment Creation
+
+The system shall create an accompaniment file mixing the no-piano and piano stems:
+
+```
+accompaniment = no_piano + piano * (solo_level / 100)
 ```
 
-The baseline target stem shall be:
+| solo_level | Output |
+|---|---|
+| 0 | Piano completely removed |
+| 1–99 | Piano blended at that percentage |
+| 100 | Piano at full original volume |
 
-```text
-piano
+The filename encodes the level:
+
+- `solo_level=0` → `<track>_no_piano.wav`
+- `solo_level=N` → `<track>_piano<N>pct.wav`
+
+### FR-004: Pitch Correction
+
+The system shall apply a pitch shift when `original_freq` and `target_freq` are configured and differ.
+
+The shift in semitones is:
+
+```
+n_steps = 12 × log₂(target_freq / original_freq)
 ```
 
-### FR-003: No-Piano Export
+Preferred backend: `pyrubberband`  
+Allowed fallback: `librosa.effects.pitch_shift`
 
-The system shall create or select a no-piano accompaniment file.
+Pitch correction is applied once before tempo processing. Tempo is not affected.
 
-Preferred behavior:
+Example configuration:
 
-1. Use the `no_piano.wav` file produced by the separation backend.
-2. If not available, combine available non-piano stems when possible.
-3. If no valid accompaniment can be created, fail with a clear error.
-
-### FR-004: Tempo Adjustment
-
-The system shall create tempo-adjusted versions of the no-piano file.
-
-Tempo adjustment shall preserve pitch.
-
-Preferred backend:
-
-```text
-pyrubberband
+```yaml
+reference_note: e_b
+original_freq: 314.0
+target_freq: 311.13
 ```
 
-Allowed fallback:
+Other examples:
 
-```text
-librosa.effects.time_stretch
+```yaml
+reference_note: a
+original_freq: 448.0
+target_freq: 440.0
 ```
 
-### FR-005: Output Naming
-
-The system shall use deterministic output names.
-
-Example:
-
-```text
-mozart_k488_movement_1_no_piano_90.wav
+```yaml
+reference_note: d_s
+original_freq: 314.0
+target_freq: 311.0
 ```
 
-### FR-006: Output Folder Creation
+Setting `original_freq: 0.0` or `target_freq: 0.0` disables pitch correction.
+
+### FR-005: Tempo Adjustment
+
+The system shall create pitch-preserving tempo-adjusted versions of the accompaniment.
+
+Preferred backend: `pyrubberband`  
+Allowed fallback: `librosa.effects.time_stretch`
+
+### FR-006: MP3 Export
+
+All final practice files shall be exported as MP3.
+
+MP3 encoding uses `lameenc`. Bitrate is configurable (`mp3_bitrate`, default 192 kbps).
+
+WAV intermediate files remain available for inspection.
+
+### FR-007: Output Naming
+
+Output filenames are deterministic:
+
+```
+<track_name>_no_piano_<speed>.mp3          (solo_level=0)
+<track_name>_piano<N>pct_<speed>.mp3       (solo_level>0)
+```
+
+### FR-008: Output Folder Creation
 
 The system shall create output folders automatically if they do not exist.
 
-### FR-007: Logging
+### FR-009: Logging
 
-The system shall write a log file for each full pipeline run.
+The system shall write a log file for each full pipeline run in `outputs/logs/`.
 
-Log files shall be saved in:
+Log content: start time, input file, model, tempo variants, export format, bitrate, solo level, pitch parameters, created files, warnings, errors.
 
-```text
-outputs/logs/
-```
-
-The log shall include:
-
-- Start time.
-- Input file.
-- Separation model.
-- Tempo variants.
-- Created files.
-- Warnings.
-- Errors.
-
-### FR-008: Configuration File
-
-The system shall read default settings from:
+### FR-010: Configuration File
 
 ```text
 configs/default.yaml
 ```
 
-Required configuration fields:
+Required fields:
 
 ```yaml
 input_file: data/raw/example.mp3
@@ -207,103 +204,61 @@ tempo_factors:
   - 0.95
   - 0.90
   - 0.85
-export_format: wav
+export_format: mp3
+mp3_bitrate: 192
+solo_level: 0
+reference_note: e_b
+original_freq: 314.0
+target_freq: 311.13
 overwrite: false
 ```
 
-### FR-009: Command-Line Execution
-
-The system shall provide script-level execution through:
+### FR-011: Command-Line Execution
 
 ```bash
-python scripts/run_separation.py
-python scripts/export_practice_versions.py
-python scripts/full_pipeline.py
-```
-
-At least the full pipeline shall accept a configuration file argument:
-
-```bash
+python scripts/run_separation.py --config configs/default.yaml
+python scripts/export_practice_versions.py --config configs/default.yaml
 python scripts/full_pipeline.py --config configs/default.yaml
-```
-
-### FR-010: Dry Run
-
-The full pipeline shall support a dry-run mode.
-
-Dry-run mode shall:
-
-- Validate paths.
-- Print planned actions.
-- Print expected output files.
-- Not run source separation.
-- Not write audio output files.
-
-Example:
-
-```bash
 python scripts/full_pipeline.py --config configs/default.yaml --dry-run
 ```
+
+### FR-012: Dry Run
+
+Dry-run mode shall validate paths, print planned actions (including pitch correction and solo level), print expected MP3 output files, and write no audio files.
 
 ## Non-Functional Requirements
 
 ### NFR-001: Local Execution
 
-The project shall run locally.
-
 No cloud service shall be required.
 
 ### NFR-002: Reproducibility
 
-Given the same input file and configuration, the system shall create the same output filenames and folder structure.
+Same input file + same configuration → same output filenames and folder structure.
 
 ### NFR-003: Inspectability
 
-Intermediate files shall remain available for manual inspection.
+Intermediate WAV files remain available for manual inspection.
 
 ### NFR-004: Practical Runtime
 
-The project may take several minutes per track depending on hardware.
-
-Runtime optimization is secondary to correctness and reproducibility.
+May take several minutes per track. Runtime optimization is secondary to correctness.
 
 ### NFR-005: Audio Quality
 
-The project shall aim for practice usability, not professional production quality.
+The project aims for practice usability, not professional production quality.
 
-Acceptable issues:
+Acceptable issues: light piano ghosting, mild separation artifacts, slight reverb inconsistency.
 
-- Light piano ghosting.
-- Mild separation artifacts.
-- Slight reverb inconsistency.
-
-Unacceptable issues:
-
-- Strong remaining piano dominating the accompaniment.
-- Broken orchestral continuity.
-- Severe distortion.
-- Pitch change in slowed versions.
-- Tempo instability caused by processing.
+Unacceptable issues: strong remaining piano dominating the accompaniment, broken orchestral continuity, severe distortion, pitch change in slowed versions, audible pitch correction artifacts, tempo instability.
 
 ### NFR-006: File Safety
 
-The system shall not overwrite existing files unless `overwrite: true` is set in the configuration.
+The system shall not overwrite existing files unless `overwrite: true`.
 
 ### NFR-007: Git Hygiene
 
 Large audio files and generated outputs shall not be committed by default.
-
-Recommended `.gitignore` entries:
-
-```gitignore
-data/raw/*
-data/separated/*
-data/exports/*
-outputs/logs/*
-outputs/reports/*
-```
-
-Optionally preserve folder structure using `.gitkeep` files.
 
 ## Proposed Project Structure
 
@@ -311,7 +266,7 @@ Optionally preserve folder structure using `.gitkeep` files.
 mozart-minus-one/
 ├── AGENT.md
 ├── SPECS.md
-├── ACEPT_CRITERIA.md
+├── ACCEPT_CRITERIA.md
 ├── README.md
 ├── pyproject.toml
 ├── requirements.txt
@@ -341,80 +296,32 @@ mozart-minus-one/
     └── reports/
 ```
 
-## Suggested Dependencies
-
-Minimum Python dependencies:
-
-```text
-demucs
-soundfile
-numpy
-pyyaml
-pyrubberband
-librosa
-pytest
-```
-
-External system dependencies:
-
-```text
-ffmpeg
-rubberband
-```
-
-`rubberband` is only required if `pyrubberband` is used.
-
-## Main Pipeline Behavior
-
-The full pipeline shall perform the following steps:
-
-1. Load configuration.
-2. Validate input file.
-3. Create required folders.
-4. Run source separation.
-5. Locate piano and no-piano stems.
-6. Export the 100 percent no-piano version.
-7. Generate 95 percent version.
-8. Generate 90 percent version.
-9. Generate 85 percent version.
-10. Save logs.
-11. Print a final summary.
-
 ## Expected Final Console Summary
-
-Example:
 
 ```text
 Pipeline completed.
 
 Input:
-  data/raw/mozart_k488_movement_1.mp3
+  data/raw/mozart_pc_22_mov1.mp3
 
 Created:
-  data/exports/mozart_k488_movement_1_no_piano_100.wav
-  data/exports/mozart_k488_movement_1_no_piano_95.wav
-  data/exports/mozart_k488_movement_1_no_piano_90.wav
-  data/exports/mozart_k488_movement_1_no_piano_85.wav
+  data/exports/mozart_pc_22_mov1_no_piano_100.mp3
+  data/exports/mozart_pc_22_mov1_no_piano_95.mp3
+  data/exports/mozart_pc_22_mov1_no_piano_90.mp3
+  data/exports/mozart_pc_22_mov1_no_piano_85.mp3
 
 Log:
-  outputs/logs/mozart_k488_movement_1.log
+  outputs/logs/mozart_pc_22_mov1.log
 ```
 
 ## Legal and Usage Constraint
 
-The tool is intended for private study and practice.
-
-The project shall not encourage redistribution of processed commercial recordings.
+The tool is intended for private study and practice. Processed commercial recordings must not be redistributed.
 
 ## Future Extensions
 
-Possible later features:
-
-- MP3 export.
 - Batch processing.
 - Manual stem quality rating.
-- Graphical waveform comparison.
 - Section-based exports.
 - Click-track generation.
-- Score-aligned practice markers.
 - GUI or simple web interface.
