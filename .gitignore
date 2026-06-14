@@ -1,0 +1,46 @@
+# Virtual environment
+.env/
+
+# Audio data – not committed
+data/raw/*
+data/separated/*
+data/exports/*
+
+# Logs and reports
+outputs/logs/*
+outputs/reports/*
+
+# Keep folder structure
+!data/raw/.gitkeep
+!data/separated/.gitkeep
+!data/exports/.gitkeep
+!outputs/logs/.gitkeep
+!outputs/reports/.gitkeep
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build / packaging
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

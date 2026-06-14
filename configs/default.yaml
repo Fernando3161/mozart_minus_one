@@ -1,0 +1,24 @@
+input_file: data/raw/mozart_pc_22_mov1.mp3
+
+separation_model: htdemucs_6s
+target_stem: piano
+
+tempo_factors:
+  - 1.00
+  - 0.95
+  - 0.90
+  - 0.85
+
+export_format: wav
+overwrite: false
+
+paths:
+  raw: data/raw
+  separated: data/separated
+  exports: data/exports
+
+outputs:
+  logs: outputs/logs
+  reports: outputs/reports
+
+logging_level: INFO
