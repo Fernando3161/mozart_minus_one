@@ -1,14 +1,69 @@
-"""Export tempo variants from an existing no-piano file."""
+"""Console entry points for the mozart-minus-one package."""
 
 import argparse
 import sys
 from pathlib import Path
 
-from mozart_minus_one.pipeline import load_config
+from mozart_minus_one.pipeline import load_config, run_pipeline
+from mozart_minus_one.separate import separate_audio
 from mozart_minus_one.tempo import export_tempo_variants
 
 
 def main() -> None:
+    """Full pipeline: separation → accompaniment mix → tempo exports."""
+    parser = argparse.ArgumentParser(
+        description="Run the full mozart-minus-one pipeline from raw audio to practice exports."
+    )
+    parser.add_argument(
+        "--config",
+        default="configs/default.yaml",
+        help="Path to YAML configuration file (default: configs/default.yaml)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate paths and print planned actions without running separation or writing audio.",
+    )
+    args = parser.parse_args()
+
+    try:
+        run_pipeline(Path(args.config), dry_run=args.dry_run)
+    except (FileNotFoundError, FileExistsError, ValueError, RuntimeError) as exc:
+        print(f"\nError: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
+def separate_main() -> None:
+    """Run only the Demucs source-separation stage."""
+    parser = argparse.ArgumentParser(
+        description="Run Demucs source separation on the configured input file."
+    )
+    parser.add_argument(
+        "--config",
+        default="configs/default.yaml",
+        help="Path to YAML configuration file (default: configs/default.yaml)",
+    )
+    args = parser.parse_args()
+
+    cfg = load_config(Path(args.config))
+    input_file = Path(cfg["input_file"])
+    separated_dir = Path(cfg.get("paths", {}).get("separated", "data/separated"))
+    model = cfg.get("separation_model", "htdemucs_6s")
+    target_stem = cfg.get("target_stem", "piano")
+
+    print(f"Input:  {input_file}")
+    print(f"Model:  {model}")
+    print(f"Output: {separated_dir}")
+
+    stems = separate_audio(input_file, separated_dir, model=model, target_stem=target_stem)
+
+    print("\nSeparation complete.")
+    for name, path in stems.items():
+        print(f"  {name}: {path}")
+
+
+def export_main() -> None:
+    """Create tempo-adjusted exports from an existing no-piano file."""
     parser = argparse.ArgumentParser(
         description=(
             "Create tempo-adjusted practice versions from an existing "
@@ -52,7 +107,7 @@ def main() -> None:
     if not source.exists():
         print(f"Error: no-piano file not found: {source}", file=sys.stderr)
         print(
-            "Run the separation stage first: python scripts/run_separation.py",
+            "Run the separation stage first: mozart-separate --config ...",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -77,7 +132,3 @@ def main() -> None:
     print("\nExported files:")
     for p in created:
         print(f"  {p}")
-
-
-if __name__ == "__main__":
-    main()

@@ -278,14 +278,3 @@ def export_tempo_variants(
         created.append(dest)
 
     return created
-
-
-# ---------------------------------------------------------------------------
-# Utility kept for backwards compatibility
-# ---------------------------------------------------------------------------
-
-def bpm_to_seconds_per_beat(bpm: float) -> float:
-    """Convert beats per minute to seconds per beat."""
-    if bpm <= 0:
-        raise ValueError("bpm must be positive")
-    return 60.0 / bpm

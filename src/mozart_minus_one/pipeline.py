@@ -54,9 +54,13 @@ def _setup_logging(logs_dir: Path, track_name: str, level: str) -> Path:
         sh.setFormatter(fmt)
         root.addHandler(sh)
 
-    fh = logging.FileHandler(log_path, encoding="utf-8")
-    fh.setFormatter(fmt)
-    root.addHandler(fh)
+    if not any(
+        isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", None) == str(log_path)
+        for h in root.handlers
+    ):
+        fh = logging.FileHandler(log_path, encoding="utf-8")
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
 
     return log_path
 
