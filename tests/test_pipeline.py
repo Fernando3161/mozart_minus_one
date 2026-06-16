@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mozart_minus_one.pipeline import load_config, run_pipeline, _resolve_paths
+from mozart_minus_one.pipeline import _resolve_paths, load_config, run_pipeline
 
 
 def _write_config(path: Path, data: dict) -> Path:
@@ -214,7 +214,6 @@ def test_tempo_factor_interpretation():
 
 def test_solo_level_range():
     from mozart_minus_one.mute_piano import create_accompaniment
-    import tempfile, os
 
     with pytest.raises(ValueError, match="solo_level"):
         create_accompaniment({}, Path("x.wav"), solo_level=101)

@@ -14,46 +14,9 @@ Intended for **private practice only**. Do not redistribute processed commercial
 
 ## Pipeline
 
-```
-┌──────────────────────────┐
-│   Raw Audio (MP3 / WAV)  │
-└──────────────────────────┘
-              │
-              ▼
-┌──────────────────────────┐
-│    Source Separation     │  ← Demucs  (htdemucs_6s)
-└──────────────────────────┘
-         │          │
-         ▼          ▼
-     [piano]    [no_piano]
-       stem        stem
-         │          │
-         └────┬─────┘
-              │  no_piano + piano × (solo_level / 100)
-              ▼
-┌──────────────────────────┐
-│    Accompaniment Mix     │
-└──────────────────────────┘
-              │
-              │  (optional — if original_freq ≠ target_freq)
-              ▼
-┌──────────────────────────┐
-│    Pitch Correction      │  ← original_freq → target_freq
-└──────────────────────────┘
-              │
-              ▼
-┌──────────────────────────┐
-│     Tempo Variants       │  ← one file per factor in tempo_factors
-└──────────────────────────┘
-      │     │     │     │
-      ▼     ▼     ▼     ▼
-    100%   95%   90%   85%
+![Pipeline](docs/pipeline_flow.png)
 
-         Practice Files
-         (MP3 or WAV)
-```
-
-Interactive version: [docs/pipeline_flow.drawio](docs/pipeline_flow.drawio)
+*Edit: [docs/pipeline_flow.drawio](docs/pipeline_flow.drawio)*
 
 ---
 

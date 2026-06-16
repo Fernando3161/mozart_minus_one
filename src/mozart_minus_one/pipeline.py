@@ -6,8 +6,8 @@ from pathlib import Path
 
 import yaml
 
-from mozart_minus_one.separate import separate_audio, validate_input
 from mozart_minus_one.mute_piano import get_accompaniment_path
+from mozart_minus_one.separate import separate_audio, validate_input
 from mozart_minus_one.tempo import export_tempo_variants, output_filename
 
 DEFAULT_CONFIG = Path("configs/default.yaml")

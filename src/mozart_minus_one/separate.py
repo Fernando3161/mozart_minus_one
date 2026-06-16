@@ -1,7 +1,6 @@
 """Audio stem separation via Demucs Python API."""
 
 import logging
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -66,8 +65,8 @@ def run_demucs(
     """
     try:
         import torch
-        from demucs.pretrained import get_model
         from demucs.apply import apply_model
+        from demucs.pretrained import get_model
     except ImportError as exc:
         raise RuntimeError(
             f"Demucs is not installed or could not be imported: {exc}. "

@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from mozart_minus_one.separate import validate_input, SUPPORTED_EXTENSIONS
-from mozart_minus_one.tempo import output_filename
 from mozart_minus_one.mute_piano import create_accompaniment, get_accompaniment_path
+from mozart_minus_one.separate import SUPPORTED_EXTENSIONS, validate_input
+from mozart_minus_one.tempo import output_filename
 
 
 # ---------------------------------------------------------------------------

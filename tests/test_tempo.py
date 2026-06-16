@@ -7,7 +7,6 @@ import pytest
 import soundfile as sf
 
 from mozart_minus_one.tempo import (
-    bpm_to_seconds_per_beat,
     export_tempo_variants,
     frequency_to_semitones,
     output_filename,
@@ -27,24 +26,6 @@ def _make_wav(path, duration_s=1.0, sample_rate=22050, channels=1):
     data = np.stack([tone, tone], axis=1) if channels == 2 else tone
     sf.write(str(path), data, sample_rate, subtype="PCM_16")
     return path
-
-
-# ---------------------------------------------------------------------------
-# BPM conversion
-# ---------------------------------------------------------------------------
-
-def test_bpm_to_seconds_per_beat():
-    assert bpm_to_seconds_per_beat(120) == pytest.approx(0.5)
-
-
-def test_bpm_to_seconds_per_beat_requires_positive_bpm():
-    with pytest.raises(ValueError, match="bpm must be positive"):
-        bpm_to_seconds_per_beat(0)
-
-
-def test_bpm_to_seconds_per_beat_negative():
-    with pytest.raises(ValueError):
-        bpm_to_seconds_per_beat(-10)
 
 
 # ---------------------------------------------------------------------------

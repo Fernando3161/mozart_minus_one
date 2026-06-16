@@ -22,7 +22,10 @@ def main() -> None:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Validate paths and print planned actions without running separation or writing audio.",
+        help=(
+            "Validate paths and print planned actions without running "
+            "separation or writing audio."
+        ),
     )
     args = parser.parse_args()
 
