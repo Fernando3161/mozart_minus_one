@@ -10,7 +10,6 @@ from mozart_minus_one.mute_piano import create_accompaniment, get_accompaniment_
 from mozart_minus_one.separate import SUPPORTED_EXTENSIONS, validate_input
 from mozart_minus_one.tempo import output_filename
 
-
 # ---------------------------------------------------------------------------
 # Project structure
 # ---------------------------------------------------------------------------
